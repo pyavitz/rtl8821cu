@@ -245,6 +245,8 @@ int rtw_dev_get_feature_set(struct net_device *dev)
 {
 	_adapter *adapter = (_adapter *)rtw_netdev_priv(dev);
 	HAL_DATA_TYPE *HalData = GET_HAL_DATA(adapter);
+	HAL_VERSION *hal_ver = &HalData->version_id;
+
 	int feature_set = 0;
 
 	feature_set |= WIFI_FEATURE_INFRA;
@@ -1233,16 +1235,16 @@ static int rtw_cfgvendor_lstats_get_info(struct wiphy *wiphy,
 	int err = 0;
 	_adapter *padapter = GET_PRIMARY_ADAPTER(wiphy_to_adapter(wiphy));
 	struct pwrctrl_priv *pwrpriv = adapter_to_pwrctl(padapter);
-	wifi_radio_stat_internal *radio;
+	wifi_radio_stat *radio;
 	wifi_iface_stat *iface;
 	char *output;
 
-	output = rtw_malloc(sizeof(wifi_radio_stat_internal) + sizeof(wifi_iface_stat));
+	output = rtw_malloc(sizeof(wifi_radio_stat) + sizeof(wifi_iface_stat)+1);
 	if (output == NULL) {
 		RTW_DBG("Allocate lstats info buffer fail!\n");
 	}
 
-	radio = (wifi_radio_stat_internal *)output;
+	radio = (wifi_radio_stat *)output;
 
 	radio->num_channels = 0;
 	radio->radio = 1;
@@ -1253,6 +1255,12 @@ static int rtw_cfgvendor_lstats_get_info(struct wiphy *wiphy,
 	radio->on_time = pwrpriv->on_time;
 	radio->tx_time = pwrpriv->tx_time;
 	radio->rx_time = pwrpriv->rx_time;
+	
+	radio->num_tx_levels = 1;
+	radio->tx_time_per_levels = NULL;
+	radio->tx_time_per_levels = (u32*)(output+sizeof(wifi_radio_stat) + sizeof(wifi_iface_stat));
+	*(radio->tx_time_per_levels) = DUMMY_TIME_STATICS;
+
 	radio->on_time_scan = 0;
 	radio->on_time_nbd = 0;
 	radio->on_time_gscan = 0;
@@ -1267,15 +1275,16 @@ static int rtw_cfgvendor_lstats_get_info(struct wiphy *wiphy,
 	RTW_INFO("radio->on_time :  %u ms\n", (radio->on_time));
 	RTW_INFO("radio->tx_time :  %u ms\n", (radio->tx_time));
 	RTW_INFO("radio->rx_time :  %u ms\n", (radio->rx_time));
+	RTW_INFO("radio->tx_time_per_levels value :  %u ms\n", *(radio->tx_time_per_levels));
 	#endif /* CONFIG_RTW_WIFI_HAL_DEBUG */
 	
 	RTW_DBG(FUNC_NDEV_FMT" %s\n", FUNC_NDEV_ARG(wdev_to_ndev(wdev)), (char*)data);
 	err =  rtw_cfgvendor_send_cmd_reply(wiphy, wdev_to_ndev(wdev), 
-		output, sizeof(wifi_iface_stat) + sizeof(wifi_radio_stat_internal));
+		output, sizeof(wifi_iface_stat) + sizeof(wifi_radio_stat)+1);
 	if (unlikely(err))
 		RTW_ERR(FUNC_NDEV_FMT"Vendor Command reply failed ret:%d \n"
 			, FUNC_NDEV_ARG(wdev_to_ndev(wdev)), err);
-	rtw_mfree(output, sizeof(wifi_iface_stat) + sizeof(wifi_radio_stat_internal));
+	rtw_mfree(output, sizeof(wifi_iface_stat) + sizeof(wifi_radio_stat)+1);
 	return err;
 }
 static int rtw_cfgvendor_lstats_set_info(struct wiphy *wiphy,	
@@ -1747,6 +1756,11 @@ static const struct wiphy_vendor_command rtw_vendor_cmds[] = {
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
 		.doit = rtw_cfgvendor_gscan_get_capabilities
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0))
+		,
+		.policy = VENDOR_CMD_RAW_DATA,
+		.maxattr = 1
+#endif
 	},
 	{
 		{
@@ -1755,6 +1769,11 @@ static const struct wiphy_vendor_command rtw_vendor_cmds[] = {
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
 		.doit = rtw_cfgvendor_set_scan_cfg
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0))
+		,
+		.policy = VENDOR_CMD_RAW_DATA,
+		.maxattr = 1
+#endif
 	},
 	{
 		{
@@ -1763,6 +1782,11 @@ static const struct wiphy_vendor_command rtw_vendor_cmds[] = {
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
 		.doit = rtw_cfgvendor_set_batch_scan_cfg
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0))
+		,
+		.policy = VENDOR_CMD_RAW_DATA,
+		.maxattr = 1
+#endif
 	},
 	{
 		{
@@ -1771,6 +1795,11 @@ static const struct wiphy_vendor_command rtw_vendor_cmds[] = {
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
 		.doit = rtw_cfgvendor_initiate_gscan
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0))
+		,
+		.policy = VENDOR_CMD_RAW_DATA,
+		.maxattr = 1
+#endif
 	},
 	{
 		{
@@ -1779,6 +1808,11 @@ static const struct wiphy_vendor_command rtw_vendor_cmds[] = {
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
 		.doit = rtw_cfgvendor_enable_full_scan_result
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0))
+		,
+		.policy = VENDOR_CMD_RAW_DATA,
+		.maxattr = 1
+#endif
 	},
 	{
 		{
@@ -1787,6 +1821,11 @@ static const struct wiphy_vendor_command rtw_vendor_cmds[] = {
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
 		.doit = rtw_cfgvendor_hotlist_cfg
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0))
+		,
+		.policy = VENDOR_CMD_RAW_DATA,
+		.maxattr = 1
+#endif
 	},
 	{
 		{
@@ -1795,6 +1834,11 @@ static const struct wiphy_vendor_command rtw_vendor_cmds[] = {
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
 		.doit = rtw_cfgvendor_significant_change_cfg
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0))
+		,
+		.policy = VENDOR_CMD_RAW_DATA,
+		.maxattr = 1
+#endif
 	},
 	{
 		{
@@ -1803,6 +1847,11 @@ static const struct wiphy_vendor_command rtw_vendor_cmds[] = {
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
 		.doit = rtw_cfgvendor_gscan_get_batch_results
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0))
+		,
+		.policy = VENDOR_CMD_RAW_DATA,
+		.maxattr = 1
+#endif
 	},
 	{
 		{
@@ -1811,6 +1860,11 @@ static const struct wiphy_vendor_command rtw_vendor_cmds[] = {
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
 		.doit = rtw_cfgvendor_gscan_get_channel_list
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0))
+		,
+		.policy = VENDOR_CMD_RAW_DATA,
+		.maxattr = 1
+#endif
 	},
 #endif /* GSCAN_SUPPORT */
 #if defined(RTT_SUPPORT) && 0
@@ -1821,6 +1875,11 @@ static const struct wiphy_vendor_command rtw_vendor_cmds[] = {
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
 		.doit = rtw_cfgvendor_rtt_set_config
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0))
+		,
+		.policy = VENDOR_CMD_RAW_DATA,
+		.maxattr = 1
+#endif
 	},
 	{
 		{
@@ -1829,6 +1888,11 @@ static const struct wiphy_vendor_command rtw_vendor_cmds[] = {
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
 		.doit = rtw_cfgvendor_rtt_cancel_config
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0))
+		,
+		.policy = VENDOR_CMD_RAW_DATA,
+		.maxattr = 1
+#endif
 	},
 	{
 		{
@@ -1837,6 +1901,11 @@ static const struct wiphy_vendor_command rtw_vendor_cmds[] = {
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
 		.doit = rtw_cfgvendor_rtt_get_capability
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0))
+		,
+		.policy = VENDOR_CMD_RAW_DATA,
+		.maxattr = 1
+#endif
 	},
 #endif /* RTT_SUPPORT */
 #ifdef CONFIG_RTW_CFGVEDNOR_LLSTATS
@@ -1847,6 +1916,11 @@ static const struct wiphy_vendor_command rtw_vendor_cmds[] = {
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
 		.doit = rtw_cfgvendor_lstats_get_info
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0))
+		,
+		.policy = VENDOR_CMD_RAW_DATA,
+		.maxattr = 1
+#endif
 	},
 	{
 		{
@@ -1855,6 +1929,11 @@ static const struct wiphy_vendor_command rtw_vendor_cmds[] = {
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
 		.doit = rtw_cfgvendor_lstats_set_info
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0))
+		,
+		.policy = VENDOR_CMD_RAW_DATA,
+		.maxattr = 1
+#endif
 	},
 	{
 		{
@@ -1863,6 +1942,11 @@ static const struct wiphy_vendor_command rtw_vendor_cmds[] = {
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
 		.doit = rtw_cfgvendor_lstats_clear_info
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0))
+		,
+		.policy = VENDOR_CMD_RAW_DATA,
+		.maxattr = 1
+#endif
 	},
 #endif /* CONFIG_RTW_CFGVEDNOR_LLSTATS */
 #ifdef CONFIG_RTW_CFGVEDNOR_RSSIMONITOR
@@ -1873,6 +1957,11 @@ static const struct wiphy_vendor_command rtw_vendor_cmds[] = {
                 },
                 .flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
                 .doit = rtw_cfgvendor_set_rssi_monitor
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0))
+		,
+		.policy = VENDOR_CMD_RAW_DATA,
+		.maxattr = 1
+#endif
         },
 #endif /* CONFIG_RTW_CFGVEDNOR_RSSIMONITOR */
 #ifdef CONFIG_RTW_CFGVENDOR_WIFI_LOGGER
@@ -1883,6 +1972,11 @@ static const struct wiphy_vendor_command rtw_vendor_cmds[] = {
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
 		.doit = rtw_cfgvendor_logger_start_logging
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0))
+		,
+		.policy = VENDOR_CMD_RAW_DATA,
+		.maxattr = 1
+#endif
 	},
 	{
 		{
@@ -1891,6 +1985,11 @@ static const struct wiphy_vendor_command rtw_vendor_cmds[] = {
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
 		.doit = rtw_cfgvendor_logger_get_feature
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0))
+		,
+		.policy = VENDOR_CMD_RAW_DATA,
+		.maxattr = 1
+#endif
 	},
 	{
 		{
@@ -1899,6 +1998,11 @@ static const struct wiphy_vendor_command rtw_vendor_cmds[] = {
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
 		.doit = rtw_cfgvendor_logger_get_version
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0))
+		,
+		.policy = VENDOR_CMD_RAW_DATA,
+		.maxattr = 1
+#endif
 	},
 	{
 		{
@@ -1907,6 +2011,11 @@ static const struct wiphy_vendor_command rtw_vendor_cmds[] = {
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
 		.doit = rtw_cfgvendor_logger_get_ring_status
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0))
+		,
+		.policy = VENDOR_CMD_RAW_DATA,
+		.maxattr = 1
+#endif
 	},
 	{
 		{
@@ -1915,6 +2024,11 @@ static const struct wiphy_vendor_command rtw_vendor_cmds[] = {
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
 		.doit = rtw_cfgvendor_logger_get_ring_data
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0))
+		,
+		.policy = VENDOR_CMD_RAW_DATA,
+		.maxattr = 1
+#endif
 	},
 	{
 		{
@@ -1923,6 +2037,11 @@ static const struct wiphy_vendor_command rtw_vendor_cmds[] = {
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
 		.doit = rtw_cfgvendor_logger_get_firmware_memory_dump
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0))
+		,
+		.policy = VENDOR_CMD_RAW_DATA,
+		.maxattr = 1
+#endif
 	},
 	{
 		{
@@ -1931,6 +2050,11 @@ static const struct wiphy_vendor_command rtw_vendor_cmds[] = {
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
 		.doit = rtw_cfgvendor_logger_start_pkt_fate_monitoring
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0))
+		,
+		.policy = VENDOR_CMD_RAW_DATA,
+		.maxattr = 1
+#endif
 	},
 	{
 		{
@@ -1939,6 +2063,11 @@ static const struct wiphy_vendor_command rtw_vendor_cmds[] = {
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
 		.doit = rtw_cfgvendor_logger_get_tx_pkt_fates
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0))
+		,
+		.policy = VENDOR_CMD_RAW_DATA,
+		.maxattr = 1
+#endif
 	},
 	{
 		{
@@ -1947,6 +2076,11 @@ static const struct wiphy_vendor_command rtw_vendor_cmds[] = {
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
 		.doit = rtw_cfgvendor_logger_get_rx_pkt_fates
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0))
+		,
+		.policy = VENDOR_CMD_RAW_DATA,
+		.maxattr = 1
+#endif
 	},	
 #endif /* CONFIG_RTW_CFGVENDOR_WIFI_LOGGER */
 #ifdef CONFIG_RTW_WIFI_HAL
@@ -1958,6 +2092,11 @@ static const struct wiphy_vendor_command rtw_vendor_cmds[] = {
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
 		.doit = rtw_cfgvendor_set_rand_mac_oui
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0))
+		,
+		.policy = VENDOR_CMD_RAW_DATA,
+		.maxattr = 1
+#endif
 	},
 #endif
 	{
@@ -1967,6 +2106,11 @@ static const struct wiphy_vendor_command rtw_vendor_cmds[] = {
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
 		.doit = rtw_cfgvendor_set_nodfs_flag
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0))
+		,
+		.policy = VENDOR_CMD_RAW_DATA,
+		.maxattr = 1
+#endif
 
 	},
 	{
@@ -1976,6 +2120,11 @@ static const struct wiphy_vendor_command rtw_vendor_cmds[] = {
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
 		.doit = rtw_cfgvendor_set_country
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0))
+		,
+		.policy = VENDOR_CMD_RAW_DATA,
+		.maxattr = 1
+#endif
 	},
 	{
 		{
@@ -1984,6 +2133,11 @@ static const struct wiphy_vendor_command rtw_vendor_cmds[] = {
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
 		.doit = rtw_cfgvendor_set_nd_offload
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0))
+		,
+		.policy = VENDOR_CMD_RAW_DATA,
+		.maxattr = 1
+#endif
 	},
 #endif /* CONFIG_RTW_WIFI_HAL */
 	{
@@ -1993,6 +2147,11 @@ static const struct wiphy_vendor_command rtw_vendor_cmds[] = {
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
 		.doit = rtw_cfgvendor_get_feature_set
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0))
+		,
+		.policy = VENDOR_CMD_RAW_DATA,
+		.maxattr = 1
+#endif
 	},
 	{
 		{
@@ -2001,6 +2160,11 @@ static const struct wiphy_vendor_command rtw_vendor_cmds[] = {
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
 		.doit = rtw_cfgvendor_get_feature_set_matrix
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0))
+		,
+		.policy = VENDOR_CMD_RAW_DATA,
+		.maxattr = 1
+#endif
 	}
 };
 
