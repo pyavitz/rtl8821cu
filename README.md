@@ -3,5 +3,5 @@
 5.8.1.37266.20200929
 ```
 ```sh
-Source: https://deb.trendtechcn.com/ (source no longer available?)
+Source: http://deb.trendtechcn.com/rtl8821cu-dkms.deb
 ```
